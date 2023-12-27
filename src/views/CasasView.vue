@@ -1,6 +1,5 @@
 <template>
-  <div v-if="lasrtresponse != ''" >Respuesta...{{ lasrtresponse }}</div>
-  <br>
+  <pre  v-if="datosEdicion.respuesta != ''">{{ datosEdicion.respuesta }}</pre>
   <div style="align-content: center;">
     <table border="1">
       <thead>
@@ -13,14 +12,14 @@
       </thead>
       <tbody v-if="datos.length > 0">
         <tr v-for="(row, rowIndex) in datos" :key="rowIndex">
-          <td v-if="!estaEditando(rowIndex, 'direccion')"  @dblclick="startEditing(rowIndex, 'direccion', row.direccion)">{{ row.direccion }}</td>
-          <td v-else><input v-model="valorTemporal"  name="direccion" @keyup.esc="cancelEdit()" @keyup.enter="saveEdit(row)"/></td>
+          <td v-if="!estaEditando(rowIndex, 'direccion')"  @dblclick="comenzarEdicion(rowIndex, 'direccion', row.direccion)">{{ row.direccion }}</td>
+          <td v-else><input v-model="valorTemporal"  name="direccion" @keyup.esc="cancelarEdicion()" @keyup.enter="guardarEdicion(row)"/></td>
 
-          <td v-if="!estaEditando(rowIndex, 'codigo_postal')" @dblclick="startEditing(rowIndex, 'codigo_postal',row.codigo_postal )">{{ row.codigo_postal }}</td>
-          <td v-else><input v-model="valorTemporal" name="codigo_postal" @keyup.esc="cancelEdit()" @keyup.enter="saveEdit(row)" /></td>
+          <td v-if="!estaEditando(rowIndex, 'codigo_postal')" @dblclick="comenzarEdicion(rowIndex, 'codigo_postal',row.codigo_postal )">{{ row.codigo_postal }}</td>
+          <td v-else><input v-model="valorTemporal" name="codigo_postal" @keyup.esc="cancelarEdicion()" @keyup.enter="guardarEdicion(row)" /></td>
 
-          <td v-if="!estaEditando(rowIndex, 'precio')" @dblclick="startEditing(rowIndex, 'precio',row.precio)">{{ row.precio }}</td>
-          <td v-else><input v-model="valorTemporal" name="codigo_postal" @keyup.esc="cancelEdit()" @keyup.enter="saveEdit(row)" /></td>
+          <td v-if="!estaEditando(rowIndex, 'precio')" @dblclick="comenzarEdicion(rowIndex, 'precio',row.precio)">{{ row.precio }}</td>
+          <td v-else><input v-model="valorTemporal" name="codigo_postal" @keyup.esc="cancelarEdicion()" @keyup.enter="guardarEdicion(row)" /></td>
 
           <td>
             <button @click.stop="eliminarRegistro(row.id)">Eliminar</button>
@@ -48,10 +47,8 @@
   import { ref, onMounted } from 'vue';
   const api = 'http://127.0.0.1:8000/api/';
   const datos = ref([]);
-  const lasrtresponse = ref("");
   const registroSeleccionado = ref({});
-  const datosEdicion = ref({row:null, campo:"", valor:null, estado:false})
-  const modoEdicion = ref(false);
+  const datosEdicion = ref({row:null, campo:"", valor:null, estado:false, respuesta:null})
   const valorTemporal = ref('');
 
   /* ui */
@@ -76,7 +73,7 @@
   }
 
 
-  const startEditing = (row, campo, valor) => {
+  const comenzarEdicion = (row, campo, valor) => {
     if(datosEdicion.value.estado)return
     valorTemporal.value = valor;
     datosEdicion.value.row = row
@@ -85,19 +82,24 @@
   };
 
 
-  const cancelEdit = () => {
+  const cancelarEdicion = () => {
     valorTemporal.value = ''
     datosEdicion.value.row = null
     datosEdicion.value.campo = null
     datosEdicion.value.estado = false;
   };
 
-  const saveEdit = (registro) => {
+  const guardarEdicion = (registro) => {
     registro[datosEdicion.value.campo] = valorTemporal.value;
+
+
+
     datosEdicion.value.row = null
     datosEdicion.value.campo = null
     datosEdicion.value.estado = false;
     registroSeleccionado.value = { ...registro };
+
+
     actualizarRegistro(registroSeleccionado)
   };
 
@@ -108,8 +110,7 @@
   try {
     let requestBody = new URLSearchParams(body);
     console.log(`${method} : ${url}`);
-    lasrtresponse.value = "";
-
+    datosEdicion.value.respuesta = "";
     const response = await fetch(url, {
       method,
       headers: {
@@ -133,17 +134,58 @@ const actualizarRegistro = async (registro) => {
   const respsol =  await  enviarSolicitud(url, method, registro.value);
   console.log ("cuando actualice recibi: " + respsol)
   await obtenerDatos()
-  cancelarEdicion();
+  borrar();
 };
 
 
 const agregarRegistro = async () => {
   let url =  api + 'casas'
-  let mesthod = 'POST'
-  const respsol =  await  enviarSolicitud(url, method, registroSeleccionado.value);
-  console.log ("cuando guarde recibi: " + respsol)
+  let method = 'POST'
+  
+//
+try {
+    let requestBody = new URLSearchParams(registroSeleccionado.value);
+    datosEdicion.value.respuesta = "";
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: requestBody,
+    });
+
+    switch (response.status) {
+      case 200:
+      case 201:
+        datosEdicion.value.respuesta = "Registro agregado";      
+        break;
+      case 422: //errores
+        const errores = await response.json()
+        //console.log(errores.errors)
+        let cadenaDeErrores = ''
+        // Recorrer las claves del objeto errores
+        for (const campo in errores.errors) {
+          if (errores.errors.hasOwnProperty(campo)) {
+            cadenaDeErrores += `${campo}: ${errores.errors[campo].join(', ')}\n `;
+          }
+          cadenaDeErrores += `\n `
+        }
+        datosEdicion.value.respuesta =cadenaDeErrores
+        console.log(cadenaDeErrores);  
+        break;
+      default:
+        console.log("ERROR: " + response.status); 
+        break;
+    }
+  } catch (error) {
+    console.error('Error en la solicitud:', error);
+  }
+
+  //const respsol =  await  enviarSolicitud(url, method, registroSeleccionado.value);
+  //console.log ("cuando guarde recibi: " + respsol)
   await obtenerDatos()
-  cancelarEdicion();
+  borrar();
 
 }
 
@@ -156,9 +198,9 @@ const eliminarRegistro = async (id) => {
   obtenerDatos();
 };
 
-const cancelarEdicion = () => {
+const borrar = () => {
   registroSeleccionado.value = {};
-  lasrtresponse.value = ""
+//  datosEdicion.value.respuesta = ""
   datosEdicion.value.estado = false;
 };
 </script>
