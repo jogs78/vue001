@@ -45,6 +45,13 @@
 
 <script setup>
   import { ref, onMounted } from 'vue';
+  import { useStore } from 'vuex';
+  const store = useStore();
+  const token = store.getters.quien.token;
+
+
+
+
   const api = 'http://127.0.0.1:8000/api/';
   const datos = ref([]);
   const registroSeleccionado = ref({});
@@ -57,9 +64,31 @@
   });
 
   function obtenerDatos() {
-    fetch(  api + 'casas')
-      .then(response =>  response.json() )
-      .then(data => {
+    fetch(  api + 'casas',{
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ' + token
+      }
+    })
+      .then(response =>  {
+        
+        switch (response.status) {
+          case 200:
+          case 201:
+            break;    
+          case 401: //autorizacion
+            datosEdicion.value.respuesta = "no tienes autoziación"
+            break;
+          default:
+            console.error('Error al obtener los datos:', error);
+
+            break;
+        }
+        return response.json()
+      } 
+        )
+      .then(data => {        
         datos.value = data;
       })
       .catch(error => {
@@ -115,7 +144,8 @@
       method,
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ' + token
       },
       body: requestBody,
     });
@@ -160,6 +190,10 @@ try {
       case 201:
         datosEdicion.value.respuesta = "Registro agregado";      
         break;
+      case 401: //autorizacion
+        datosEdicion.value.respuesta = "No tienes autorizacion para esta acción"
+        break;
+
       case 422: //errores
         const errores = await response.json()
         //console.log(errores.errors)
